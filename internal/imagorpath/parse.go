@@ -3,6 +3,7 @@ package imagorpath
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/cshum/imagor/pkg/params"
@@ -19,34 +20,36 @@ var breaksCleaner = strings.NewReplacer(
 	"\u2029", "",
 )
 
+var filterRegex = regexp.MustCompile(`^(?P<name>.*)\((?P<args>.+)\)$`)
+
 var regex = regexp.MustCompile(
 	`^/?` +
 		// params
-		`(?P<params>params/)?` +
+		`(?:(?P<params>params)/)?` +
 		// hmac
-		`(?P<hmac>(unsafe/)|([A-Za-z0-9-_=]{8,})/)?` +
+		`(?:(?P<hmac>unsafe|[A-Za-z0-9-_=]{8,})/)?` +
 		// meta
-		`(?P<meta>meta/)?` +
+		`(?:(?P<meta>meta)/)?` +
 		// trim
-		`(?P<trim>trim/(:(?P<trim_align>(top-left|bottom-right))?(:(?P<trim_tolerance>\d+))?/)?)?` +
+		`(?:(?P<trim>trim)(?:/(?P<trim_by>top-left|bottom-right)(?::(?P<trim_tolerance>\d+))?)?/)?` +
 		// crop
-		`(?P<crop>((0?\.)?\d+)x((0?\.)?\d+):((?P<crop_x>((0?\.)?\d+))x((?P<crop_y>((0?\.)?\d+))))/)?` +
+		`(?:(?P<crop_left>\d+(?:\.\d+)?)x(?P<crop_top>\d+(?:\.\d+)?)(?::(?P<crop_right>\d+(?:\.\d+)?)x(?P<crop_bottom>\d+(?:\.\d+)?))?/)?` +
 		// fit-in
-		`(?P<fit_in>fit-in/)?` +
+		`(?:(?P<fit_in>fit-in)/)?` +
 		// stretch
-		`(?P<stretch>stretch/)?` +
+		`(?:(?P<stretch>stretch)/)?` +
 		// dimensions
-		`(?P<dimensions>((\-?)(\d*)x(\-?)(\d*)/)?)` +
+		`(?:(?P<h_flip>-)?(?P<width>\d+)x(?P<v_flip>-)?(?P<height>\d+)/)?` +
 		// paddings
-		`(?P<paddings>((\d+)x(\d+)(:(\d+)x(\d+))?/)?)?` +
+		`(?:(?P<padding_left>\d+)x(?P<padding_top>\d+)(?::(?P<padding_right>\d+)x(?P<padding_bottom>\d+))?/)?` +
 		// h_align
-		`(?P<h_align>(left|right|center)/)?` +
+		`(?:(?P<h_align>left|right|center)/)?` +
 		// v_align
-		`(?P<v_align>(top|bottom|middle)/)?` +
+		`(?:(?P<v_align>top|bottom|middle)/)?` +
 		// smart
-		`(?P<smart>smart/)?` +
+		`(?:(?P<smart>smart)/)?` +
 		// filters
-		`(?P<filters>.*/)?` +
+		`(?:filters:(?P<filters>.*)/)?` +
 		// image
 		`(?P<image>.+)?` +
 		`$`,
@@ -56,69 +59,194 @@ type parser struct {
 	params *params.Params
 }
 
-func (p parser) parseParams(_ string) error {
-	p.params.Echo = true
+func (p parser) parseParams(value string) error {
+	p.params.Echo = value == "params"
 	return nil
 }
 
-func (p parser) parseHMAC(hmac string) error {
-	p.params.Unsafe = hmac == "unsafe/"
-	p.params.Hash = hmac
+func (p parser) parseHMAC(value string) error {
+	if value == "unsafe" {
+		p.params.Unsafe = true
+	} else if value != "" {
+		p.params.Hash = value
+	}
 	return nil
 }
 
-func (p parser) parseMeta(_ string) error {
-	p.params.Meta = true
+func (p parser) parseMeta(value string) error {
+	p.params.Meta = value == "meta"
 	return nil
 }
 
-func (p parser) parseTrim(trim string) error {
-	// TODO
+func (p parser) parseTrim(value string) error {
+	p.params.Trim = value == "trim"
 	return nil
 }
 
-func (p parser) parseCrop(crop string) error {
-	// TODO
+func (p parser) parseTrimBy(value string) error {
+	if value == params.TrimByTopLeft || value == params.TrimByBottomRight {
+		p.params.TrimBy = value
+	}
 	return nil
 }
 
-func (p parser) parseFitIn(_ string) error {
-	p.params.FitIn = true
+func (p parser) parseTrimTolerance(value string) error {
+	t, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid trim_tolerance value: %s", value)
+	}
+	p.params.TrimTolerance = t
 	return nil
 }
 
-func (p parser) parseStretch(_ string) error {
-	p.params.Stretch = true
+func (p parser) parseCropLeft(value string) error {
+	c, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fmt.Errorf("invalid crop_left value: %s", value)
+	}
+	p.params.CropLeft = c
 	return nil
 }
 
-func (p parser) parseDimensions(dimensions string) error {
-	// TODO
+func (p parser) parseCropTop(value string) error {
+	c, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fmt.Errorf("invalid crop_top value: %s", value)
+	}
+	p.params.CropTop = c
 	return nil
 }
 
-func (p parser) parsePaddings(paddings string) error {
-	// TODO
+func (p parser) parseCropRight(value string) error {
+	c, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fmt.Errorf("invalid crop_right value: %s", value)
+	}
+	p.params.CropRight = c
 	return nil
 }
 
-func (p parser) parseHAlign(hAlign string) error {
-	// TODO
+func (p parser) parseCropBottom(value string) error {
+	c, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fmt.Errorf("invalid crop_bottom value: %s", value)
+	}
+	p.params.CropBottom = c
 	return nil
 }
 
-func (p parser) parseVAlign(vAlign string) error {
-	// TODO
+func (p parser) parseFitIn(value string) error {
+	p.params.FitIn = value == "fit-in"
 	return nil
 }
 
-func (p parser) parseSmart(_ string) error {
-	p.params.Smart = true
+func (p parser) parseStretch(value string) error {
+	p.params.Stretch = value == "stretch"
 	return nil
 }
 
-func (p parser) parseFilters(filters string) error {
-	// TODO
+func (p parser) parseHFlip(value string) error {
+	p.params.HFlip = value == "-"
+	return nil
+}
+
+func (p parser) parseWidth(value string) error {
+	w, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid width value: %s", value)
+	}
+	p.params.Width = w
+	return nil
+}
+
+func (p parser) parseVFlip(value string) error {
+	p.params.VFlip = value == "-"
+	return nil
+}
+
+func (p parser) parseHeight(value string) error {
+	h, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid height value: %s", value)
+	}
+	p.params.Height = h
+	return nil
+}
+
+func (p parser) parsePaddingLeft(value string) error {
+	d, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid padding_left value: %s", value)
+	}
+	p.params.PaddingLeft = d
+	return nil
+}
+
+func (p parser) parsePaddingTop(value string) error {
+	d, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid padding_top value: %s", value)
+	}
+	p.params.PaddingTop = d
+	return nil
+}
+
+func (p parser) parsePaddingRight(value string) error {
+	d, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid padding_right value: %s", value)
+	}
+	p.params.PaddingRight = d
+	return nil
+}
+
+func (p parser) parsePaddingBottom(value string) error {
+	d, err := strconv.Atoi(value)
+	if err != nil {
+		return fmt.Errorf("invalid padding_bottom value: %s", value)
+	}
+	p.params.PaddingBottom = d
+	return nil
+}
+
+func (p parser) parseHAlign(value string) error {
+	if value != params.HAlignLeft && value != params.HAlignRight {
+		return fmt.Errorf("invalid h_align value: %s", value)
+	}
+	p.params.HAlign = value
+	return nil
+}
+
+func (p parser) parseVAlign(value string) error {
+	if value != params.VAlignTop && value != params.VAlignBottom {
+		return fmt.Errorf("invalid v_align value: %s", value)
+	}
+	p.params.VAlign = value
+	return nil
+}
+
+func (p parser) parseSmart(value string) error {
+	p.params.Smart = value == "smart"
+	return nil
+}
+
+func (p parser) parseFilters(value string) error {
+	rawFilters := strings.Split(value, ":")
+	filters := make([]params.Filter, len(rawFilters))
+	for i, rawFilter := range rawFilters {
+		filter := params.Filter{}
+		matches := filterRegex.FindStringSubmatch(rawFilter)
+		for i, group := range filterRegex.SubexpNames() {
+			switch group {
+			case "name":
+				filter.Name = matches[i]
+			case "args":
+				filter.Args = matches[i]
+			}
+		}
+		filters[i] = filter
+	}
+	p.params.Filters = filters
 	return nil
 }
 
@@ -130,12 +258,14 @@ func (p parser) parseImage(image string) error {
 func (p parser) parse(path string) error {
 	path = breaksCleaner.Replace(path)
 
+	// TODO: add timeout
 	matches := regex.FindStringSubmatch(path)
 	if len(matches) <= 1 {
 		return fmt.Errorf("invalid path: %s", path)
 	}
 
 	for i, group := range regex.SubexpNames() {
+		fmt.Printf("%s: %s\n", group, matches[i])
 		switch group {
 		case "params":
 			if err := p.parseParams(matches[i]); err != nil {
@@ -153,8 +283,28 @@ func (p parser) parse(path string) error {
 			if err := p.parseTrim(matches[i]); err != nil {
 				return err
 			}
-		case "crop":
-			if err := p.parseCrop(matches[i]); err != nil {
+		case "trim_by":
+			if err := p.parseTrimBy(matches[i]); err != nil {
+				return err
+			}
+		case "trim_tolerance":
+			if err := p.parseTrimTolerance(matches[i]); err != nil {
+				return err
+			}
+		case "crop_left":
+			if err := p.parseCropLeft(matches[i]); err != nil {
+				return err
+			}
+		case "crop_top":
+			if err := p.parseCropTop(matches[i]); err != nil {
+				return err
+			}
+		case "crop_right":
+			if err := p.parseCropRight(matches[i]); err != nil {
+				return err
+			}
+		case "crop_bottom":
+			if err := p.parseCropBottom(matches[i]); err != nil {
 				return err
 			}
 		case "fit_in":
@@ -165,12 +315,36 @@ func (p parser) parse(path string) error {
 			if err := p.parseStretch(matches[i]); err != nil {
 				return err
 			}
-		case "dimensions":
-			if err := p.parseDimensions(matches[i]); err != nil {
+		case "h_flip":
+			if err := p.parseHFlip(matches[i]); err != nil {
 				return err
 			}
-		case "paddings":
-			if err := p.parsePaddings(matches[i]); err != nil {
+		case "width":
+			if err := p.parseWidth(matches[i]); err != nil {
+				return err
+			}
+		case "v_flip":
+			if err := p.parseVFlip(matches[i]); err != nil {
+				return err
+			}
+		case "height":
+			if err := p.parseHeight(matches[i]); err != nil {
+				return err
+			}
+		case "padding_left":
+			if err := p.parsePaddingLeft(matches[i]); err != nil {
+				return err
+			}
+		case "padding_top":
+			if err := p.parsePaddingTop(matches[i]); err != nil {
+				return err
+			}
+		case "padding_right":
+			if err := p.parsePaddingRight(matches[i]); err != nil {
+				return err
+			}
+		case "padding_bottom":
+			if err := p.parsePaddingBottom(matches[i]); err != nil {
 				return err
 			}
 		case "h_align":
