@@ -1,5 +1,9 @@
 package params
 
+type TrimBy string
+type HAlign string
+type VAlign string
+
 const (
 	// TrimByTopLeft trim by top-left keyword
 	TrimByTopLeft = "top-left"
@@ -26,7 +30,7 @@ type Filters []Filter
 
 // Params image endpoint parameters
 type Params struct {
-	Params        bool    `json:"-"`
+	Echo          bool    `json:"-"`
 	Path          string  `json:"path,omitempty"`
 	Image         string  `json:"image,omitempty"`
 	Unsafe        bool    `json:"unsafe,omitempty"`

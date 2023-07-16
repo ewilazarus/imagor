@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cshum/imagor/internal/imagorpath"
 	"github.com/cshum/imagor/pkg/params"
 )
 
@@ -47,7 +48,7 @@ var DigestStorageHasher = StorageHasherFunc(hexDigestPath)
 // DigestResultStorageHasher  ResultStorageHasher using SHA digest
 var DigestResultStorageHasher = ResultStorageHasherFunc(func(p params.Params) string {
 	if p.Path == "" {
-		p.Path = GeneratePath(p)
+		p.Path = imagorpath.BuildUnsafe(p)
 	}
 	return hexDigestPath(p.Path)
 })
@@ -55,7 +56,7 @@ var DigestResultStorageHasher = ResultStorageHasherFunc(func(p params.Params) st
 // SuffixResultStorageHasher  ResultStorageHasher using storage path with digest suffix
 var SuffixResultStorageHasher = ResultStorageHasherFunc(func(p params.Params) string {
 	if p.Path == "" {
-		p.Path = GeneratePath(p)
+		p.Path = imagorpath.BuildUnsafe(p)
 	}
 	var digest = sha1.Sum([]byte(p.Path))
 	var hash = "." + hex.EncodeToString(digest[:])[:20]
@@ -80,7 +81,7 @@ var SuffixResultStorageHasher = ResultStorageHasherFunc(func(p params.Params) st
 // SizeSuffixResultStorageHasher  ResultStorageHasher using storage path with digest and size suffix
 var SizeSuffixResultStorageHasher = ResultStorageHasherFunc(func(p params.Params) string {
 	if p.Path == "" {
-		p.Path = GeneratePath(p)
+		p.Path = imagorpath.BuildUnsafe(p)
 	}
 	var digest = sha1.Sum([]byte(p.Path))
 	var hash = "." + hex.EncodeToString(digest[:])[:20]
